@@ -86,7 +86,7 @@ Organization
 
 ##  5. <a name='Authentication'></a>Authentication
 
-This section is the hands-on introduction to auth and profiles. The core commands appear here once; later sections reference and contextualize them for containers, CI, and cleanup.
+This section is the hands-on introduction to auth and profiles. The core commands appear here once; later sections reference this section to avoid repetition.
 
 Use a multi‑account approach: first verify your state, create or activate the right profile, and then log in.
 
@@ -179,13 +179,13 @@ Manage via commands, not manual edits:
 - Avoid editing files in ~/.config/gcloud; if needed, reset ADC by deleting ~/.config/gcloud/application_default_credentials.json and re‑running the commands above in the correct profile.
 
 ###  5.2. <a name='QuickDecisionGuide:LocalDevvs.WorkSSO'></a>Quick Decision Guide: Local Dev vs. Work SSO
-(See Authentication above for setup commands; this guide helps choose the right credential source per context.)
+(See [Credentials Map](#CredentialsMap) for choosing a credential type; use the commands in [Authentication](#Authentication) for setup.)
 - Personal exploration (local dev): use `gcloud auth application-default login` (ADC). No key files needed, works with Google OAuth in browser.
 - Work/SSO environments: prefer organization policies; if SSO blocks user ADC or requires service accounts, use a service account and set `GOOGLE_APPLICATION_CREDENTIALS` to its JSON key.
 - CI/CD or non-interactive: always use a service account key (or workload identity if available).
 
 ### Addendum: Same vs Different (ADC vs SA)
-For deeper comparisons, see this quick addendum.
+For deeper comparisons, see the [Credentials Map](#CredentialsMap). This addendum defers to that single source to keep things concise.
 
 | Aspect | User ADC (refresh token) | Service Account (private key) |
 |---|---|---|
@@ -200,6 +200,35 @@ For deeper comparisons, see this quick addendum.
 Notes
 - Audit/logging principal: user shows as `user:<email>`; service account shows as `serviceAccount:<name>@<project>.iam.gserviceaccount.com`.
  - When a personal‑project service account is useful (brief): non‑interactive local workloads, tightly scoped least‑privilege access (e.g., one bucket), prod‑like SA policy testing, or deploying a service in your personal project. See the guidance above: [Why not use a personal‑project SA for local dev?](#PersonalSAAdvice)
+
+###  5.x. <a name='CredentialsMap'></a>Credentials Map (ADC vs Service Account vs API Key)
+To avoid confusion, here is how the three credential types differ and when to use each.
+
+- ADC (user OAuth refresh token)
+  - Source: created via `gcloud auth application-default login` → writes to `~/.config/gcloud/application_default_credentials.json`.
+  - Used by: Google Cloud client libraries (Storage, Pub/Sub, IAM, etc.).
+  - Behavior: Libraries mint short‑lived OAuth access tokens and attach `Authorization: Bearer <token>` automatically.
+  - When to use: Local interactive development; mounting into containers for dev parity; commands like `gcloud auth application-default print-access-token` for manual HTTP tests.
+
+- Service Account credentials (private key JSON)
+  - Source: downloaded key for a service account; provided via `GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json`.
+  - Used by: Same Google Cloud client libraries when non‑interactive or stricter scoping is required (CI/CD, prod services).
+  - Behavior: Libraries sign JWTs locally with the private key to obtain short‑lived access tokens; headers still carry `Authorization: Bearer <token>`.
+  - When to use: Automation, CI/CD, or when org policy mandates SAs; avoid baking keys into images, prefer runtime mounts or Workload Identity.
+
+- API Key (Generative AI)
+  - Source: static key string provided by the Generative AI service; store as `GOOGLE_API_KEY` in env/.env.
+  - Used by: `google-generativeai` SDK and services that explicitly require API keys.
+  - Behavior: Configured once (e.g., `genai.configure(api_key=...)`); requests authenticate via API key, not OAuth. Do not use API keys for Google Cloud OAuth‑protected services.
+  - When to use: Calling Generative AI models/endpoints; keep separate from ADC/SA flows.
+
+Practical guidance
+- Use this section as the single source of truth on credential types.
+ - Containers: it’s common to provide both, but each is used for different services.
+  - Google Cloud APIs → prefer ADC for dev; SA for CI/prod. API keys are not used for Cloud OAuth APIs.
+  - Generative AI → provide `GOOGLE_API_KEY` via env; ADC is not required for Generative AI.
+- Headers: only short‑lived access tokens go into `Authorization: Bearer ...`. API keys are sent per the Generative AI client’s configuration.
+- Separation of concerns: do not mix API keys and OAuth tokens for the same request.
 
 ###  5.3. <a name='Profiles:CleanlySeparatePersonalandWork'></a>Profiles: Cleanly Separate Personal and Work
 Use profiles to isolate contexts; create them only once, then switch.
@@ -236,7 +265,7 @@ export GOOGLE_APPLICATION_CREDENTIALS="$HOME/.credentials/my-sa.json"
 Rotate keys periodically and avoid committing them. Consider Workload Identity Federation for CI to avoid static keys.
 
 ###  5.5. <a name='VerifyandCleanUpavoidlingeringstate'></a>Verify and Clean Up (avoid lingering state)
-To avoid duplication, use the [Authentication](#Authentication) block above for setup. Quick verify/reset commands:
+Use [Authentication](#Authentication) for commands; this section only lists quick checks to avoid duplication.
 
 ```bash
 # Print an access token (manual testing)
@@ -313,15 +342,25 @@ if __name__ == "__main__":
   main()
 ```
 
-Run locally after setting up ADC:
+Container-only workflow (no host installs):
+- Build image and run with ADC mounted via [Justfile](Justfile).
+
 ```bash
-python app.py
+# Build container (installs deps inside the image)
+just build
+
+# Run container with ADC mounted (replace YOUR_PROJECT_ID)
+just run PROJECT_ID=YOUR_PROJECT_ID
+
+# Optional: open a shell in the image
+just shell
 ```
 
 ##  8. <a name='Resources'></a>Resources
 
 - [Official ADK Documentation](https://cloud.google.com/adk)
 - [API Reference](https://cloud.google.com/adk/docs/reference)
+- [ADK Python API Reference](https://google.github.io/adk-docs/api-reference/python/)
  - [gcloud Configurations](https://cloud.google.com/sdk/docs/configurations)
  - [Application Default Credentials](https://cloud.google.com/docs/authentication/provide-credentials-adc)
  - [Service Accounts](https://cloud.google.com/iam/docs/service-accounts)
@@ -330,3 +369,85 @@ python app.py
 ##  9. <a name='License'></a>License
 
 MIT
+
+##  10. Programmatic Credentials (API key vs access token)
+
+There are two common credential shapes you may need:
+- API key: used by Google Generative AI (via `google-generativeai`).
+- OAuth access token: minted automatically from ADC for Google Cloud client libraries.
+
+API key (Generative AI)
+- Preferred: store in `.env` and read at runtime. See [Credentials Map](#CredentialsMap) for how API keys differ from ADC/SA.
+
+```python
+# Load API key from env (e.g., via python-dotenv)
+import os
+api_key = os.environ.get("GOOGLE_API_KEY")
+if not api_key:
+  raise RuntimeError("GOOGLE_API_KEY is not set. Add it to .env or your runtime env.")
+
+import google.generativeai as genai
+genai.configure(api_key=api_key)
+```
+
+Access token (ADC → Bearer) for manual testing
+- Client libraries auto-handle this; you typically do NOT need to fetch tokens.
+- For debugging or calling an HTTP API manually, mint a token from ADC:
+
+```python
+import google.auth
+from google.auth.transport.requests import Request
+
+credentials, project_id = google.auth.default()
+credentials.refresh(Request())
+print("Access Token:", credentials.token)
+print("Project:", project_id)
+```
+
+CLI alternative (quick check):
+```bash
+gcloud auth application-default print-access-token
+```
+
+Notes (see [Credentials Map](#CredentialsMap) for detail)
+- API keys: only for services that require them (e.g., Generative AI).
+- ADC: for Google Cloud services; libraries attach Bearer tokens automatically.
+- Service accounts: similar runtime behavior to ADC, but private keys and least‑privilege for automation.
+
+### API Key: Create, Capture, Store (quick how‑to)
+- Enable API Keys API (if not already):
+```bash
+gcloud services enable apikeys.googleapis.com
+```
+- Create a new key and capture the raw key string (shown only once):
+```bash
+gcloud services api-keys create --display-name="genai-dev" --format="get(keyString)"
+```
+- Verify keys (metadata only; does not show the key string again):
+```bash
+gcloud services api-keys list --format="table(name,displayName,uid,createTime)"
+```
+- Store the key securely in Secret Manager:
+```bash
+gcloud secrets create genai-api-key --replication-policy="automatic"
+printf "%s" "YOUR_API_KEY" | gcloud secrets versions add genai-api-key --data-file=-
+```
+- Retrieve at runtime (Python) and configure Generative AI:
+```python
+from google.cloud import secretmanager
+import google.generativeai as genai
+
+client = secretmanager.SecretManagerServiceClient()
+name = client.secret_version_path("YOUR_PROJECT_ID", "genai-api-key", "latest")
+payload = client.access_secret_version(request={"name": name}).payload.data.decode("utf-8")
+genai.configure(api_key=payload)
+```
+- Optional: inject via env when running a container (never bake into images):
+```bash
+docker run --rm \
+  -e GOOGLE_API_KEY="$(gcloud secrets versions access latest --secret=genai-api-key)" \
+  adk-examples:latest
+```
+
+Reminder
+- You cannot retrieve the raw API key string again after creation; rotate by creating a new key, updating consumers, and deleting the old one.

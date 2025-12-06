@@ -1,0 +1,41 @@
+from google.adk.agents import Agent
+from google.cloud import secretmanager
+import os
+import google.generativeai as genai
+
+
+project_id = os.getenv("GOOGLE_CLOUD_PROJECT", "adk-explorer-2025")
+genai_api_key_secret_name = os.getenv("GENAI_API_KEY_SECRET_NAME", "genai-api-key")
+#
+# 
+# 
+# api_key = None
+
+# Configure Generative AI from Secret Manager (no env usage)
+def configure_genai_api_key(project_id: str, secret_id: str, version: str = "latest") -> None:
+    # Always retrieve from Secret Manager, then set process env for downstream libs
+    client = secretmanager.SecretManagerServiceClient()
+    name = client.secret_version_path(project_id, secret_id, version)
+    payload = client.access_secret_version(request={"name": name}).payload.data.decode("utf-8")
+    #somewhat hacky but genai lib reads from env var
+    os.environ["GOOGLE_API_KEY"] = payload
+    #genai.configure(api_key=payload)
+    
+
+configure_genai_api_key(project_id=project_id, secret_id=genai_api_key_secret_name)
+
+
+# Factory for the Reluctant Agent with configuration
+def create_agent():
+    return Agent(
+        name="reluctant_agent",
+        model="gemini-2.5-flash",
+        description="Reluctant assistant",
+        instruction=(
+            "You are a somewhat unhelpful assistant who eventually does the "
+            "right thing, but you are not really eager to be there."
+        )
+    )
+
+
+root_agent = create_agent()
