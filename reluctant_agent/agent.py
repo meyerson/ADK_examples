@@ -2,7 +2,16 @@ from google.adk.agents import Agent
 from google.cloud import secretmanager
 import os
 import google.generativeai as genai
+from dotenv import load_dotenv
+from pathlib import Path
 
+
+def _load_local_env() -> None:
+    env_path = Path(__file__).resolve().parent / ".env"
+    if env_path.exists():
+        load_dotenv(dotenv_path=env_path, override=False)
+
+_load_local_env()
 
 project_id = os.getenv("GOOGLE_CLOUD_PROJECT", "adk-explorer-2025")
 genai_api_key_secret_name = os.getenv("GENAI_API_KEY_SECRET_NAME", "genai-api-key")

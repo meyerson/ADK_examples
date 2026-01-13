@@ -43,7 +43,8 @@ web:
 		docker run --rm \
 		  -v "$SRC:$DEST:ro" \
 		  -v "{{agent_path}}:/app/agents:ro" \
-		  -p 8080:8080 \
+		  -p 8000:8000 \
 			$ENV_FILE_ARG \
 		  -e GOOGLE_APPLICATION_CREDENTIALS="$DEST" \
+			-w /app/agents \
 		  adk-examples:latest adk web --host 0.0.0.0 --port 8000
