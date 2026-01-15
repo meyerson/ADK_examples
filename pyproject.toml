@@ -12,6 +12,8 @@ python = ">=3.10,<3.13"
 google-adk = "*"
 google-generativeai = "*"
 python-dotenv = "^1.0.1"
+twilio = "^9.3.8"
+litellm = "*"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.10.0"

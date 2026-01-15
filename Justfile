@@ -12,16 +12,6 @@ setup_just:
 build:
 	docker build -t adk-examples:latest .
 
-# run:
-# 	SRC="{{adc_path}}"; \
-# 	DEST="/app/creds.json"; \
-# 		docker run --rm \
-# 		  -v "$SRC:$DEST:ro" \
-# 		-v "{{agent_path}}:/app/agents:ro" \
-# 		-p 8080:8080 \
-# 		-e GOOGLE_APPLICATION_CREDENTIALS="$DEST" \
-# 		adk-examples:latest
-
 shell:
 	SRC="{{adc_path}}"; \
 	DEST="/app/creds.json"; \
@@ -47,4 +37,4 @@ web:
 			$ENV_FILE_ARG \
 		  -e GOOGLE_APPLICATION_CREDENTIALS="$DEST" \
 			-w /app/agents \
-		  adk-examples:latest adk web --host 0.0.0.0 --port 8000
+		  adk-examples:latest adk web --reload_agents --host 0.0.0.0 --port 8000
